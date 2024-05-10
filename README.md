@@ -1,6 +1,7 @@
 # plsql-plsql-adv-projects
 
 PLSQL projects used to solve some business issues:
+
 This PLSQL project calculates the installment dates and amounts for contracts. It also handles the first installment and adds all new data to a new table in the database schema.
 
 PLSQL Adv projects used to solve some business issues:
