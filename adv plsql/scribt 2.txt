@@ -1,0 +1,72 @@
+declare
+    cursor trg_seq_cursor is
+        select uc.constraint_name, ucc.table_name, ucc.column_name, utc.data_type
+        from user_constraints uc, user_cons_columns ucc, user_objects uo, user_tab_columns utc
+        where ucc.constraint_name = uc.constraint_name
+        and ucc.table_name = uc.table_name
+        and ucc.table_name = uo.object_name
+        and ucc.table_name = utc.table_name
+        and utc.column_name = ucc.column_name
+        and uc.constraint_type = 'P'
+        and uo.object_type = 'TABLE'
+        and (utc.data_type = 'NUMBER' or utc.data_type = 'INTEGER');
+
+begin
+    
+    for trg_seq_record in trg_seq_cursor loop
+        begin
+            execute immediate 'drop sequence ' || trg_seq_record.table_name || '_seq';
+        exception
+            when others then
+                null; 
+        end;
+    end loop;
+
+    
+    for trg_seq_record in trg_seq_cursor loop
+        declare
+            max_id number;
+            is_composite_key number; 
+        begin
+            
+            select count(*)
+            into is_composite_key
+            from user_cons_columns
+            where constraint_name = trg_seq_record.constraint_name
+            and table_name = trg_seq_record.table_name
+            and column_name != trg_seq_record.column_name;
+
+            
+            if (trg_seq_record.data_type = 'NUMBER' or trg_seq_record.data_type = 'INTEGER') and is_composite_key = 0 then
+                
+                execute immediate 'select nvl(max(' || trg_seq_record.column_name || '), 0) + 1 from ' || trg_seq_record.table_name
+                    into max_id;
+
+                
+                execute immediate
+                    'create sequence ' || trg_seq_record.table_name || '_seq
+                    start with ' || max_id || '
+                    increment by 1
+                    maxvalue 99999999
+                    minvalue 1
+                    nocycle
+                    cache 20
+                    noorder';
+
+                
+                execute immediate
+                    'create or replace trigger ' || trg_seq_record.table_name || '_trg
+                    before insert or update
+                    on ' || trg_seq_record.table_name || '
+                    referencing new as new old as old
+                    for each row
+                    begin
+                        :new.' || trg_seq_record.column_name || ' := ' || trg_seq_record.table_name || '_seq.nextval;
+                    end;';
+            end if;
+        end;
+    end loop;
+
+end;
+/
+

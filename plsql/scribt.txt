@@ -1,0 +1,38 @@
+select * from contracts ;
+
+DECLARE
+  CURSOR contracts_cursor IS 
+    SELECT *
+    FROM contracts;
+  v_num_count NUMBER(4);
+  v_amount_paid NUMBER(10,2);
+  v_install_date DATE;
+  v_increment NUMBER(4);
+  
+BEGIN
+  FOR contracts_record IN contracts_cursor LOOP
+    IF contracts_record.CONTRACT_PAYMENT_TYPE = 'ANNUAL' THEN
+      v_increment := 12;
+    ELSIF contracts_record.CONTRACT_PAYMENT_TYPE = 'HALF_ANNUAL' THEN
+      v_increment := 6;
+    ELSIF contracts_record.CONTRACT_PAYMENT_TYPE = 'QUARTER' THEN
+      v_increment := 3;
+    ELSIF contracts_record.CONTRACT_PAYMENT_TYPE = 'MONTHLY' THEN
+      v_increment := 1;
+    END IF;
+
+    v_num_count := MONTHS_BETWEEN(contracts_record.CONTRACT_ENDDATE, contracts_record.CONTRACT_STARTDATE) / v_increment;
+    v_amount_paid := (contracts_record.CONTRACT_TOTAL_FEES - nvl( contracts_record.CONTRACT_DEPOSIT_FEES,0)) / v_num_count;
+    
+    v_install_date := contracts_record.CONTRACT_STARTDATE;
+
+  for i in 1..v_num_count loop
+      INSERT INTO INSTALLMENTS_PAID (INSTALLMENT_ID, CONTRACT_ID, INSTALLMENT_DATE, INSTALLMENT_AMOUNT)
+      VALUES (INSTALLMENTS_PAID_SEQ.nextval, contracts_record.contract_id, v_install_date, v_amount_paid);
+      v_install_date := ADD_MONTHS(v_install_date, v_increment);
+    END LOOP;
+  END LOOP;
+END;
+
+
+SELECT * FROM HR.INSTALLMENTS_PAID;

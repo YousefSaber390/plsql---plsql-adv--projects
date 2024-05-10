@@ -1,0 +1,180 @@
+declare
+    cursor trg_seq_cursor is
+        select uc.constraint_name, ucc.table_name, ucc.column_name, utc.data_type
+        from user_constraints uc, user_cons_columns ucc, user_objects uo, user_tab_columns utc
+        where ucc.constraint_name = uc.constraint_name
+        and ucc.table_name = uc.table_name
+        and ucc.table_name = uo.object_name
+        and ucc.table_name = utc.table_name
+        and utc.column_name = ucc.column_name
+        and uc.constraint_type = 'P'
+        and uo.object_type = 'TABLE'
+        and (utc.data_type = 'NUMBER' or utc.data_type = 'INTEGER');
+
+begin
+    
+    for trg_seq_record in trg_seq_cursor loop
+        begin
+            execute immediate 'DROP SEQUENCE ' || trg_seq_record.table_name || '_SEQ';
+        exception
+            when others then
+                null; 
+        end;
+    end loop;
+
+    
+    for trg_seq_record in trg_seq_cursor loop
+        declare
+            max_id number;
+            is_composite_key number; 
+        begin
+            
+            select count(*)
+            into is_composite_key
+            from user_cons_columns
+            where constraint_name = trg_seq_record.constraint_name
+            and table_name = trg_seq_record.table_name
+            and column_name != trg_seq_record.column_name;
+
+            if (trg_seq_record.data_type = 'NUMBER' or trg_seq_record.data_type = 'INTEGER') and is_composite_key = 0 then
+                
+                execute immediate 'select nvl(max(' || trg_seq_record.column_name || '), 0) + 1 from ' || trg_seq_record.table_name
+                    into max_id;
+
+                
+                execute immediate
+                    'CREATE SEQUENCE ' || trg_seq_record.table_name || '_SEQ
+                    START WITH ' || max_id || '
+                    INCREMENT BY 1
+                    MAXVALUE 99999999
+                    MINVALUE 1
+                    NOCYCLE
+                    CACHE 20
+                    NOORDER';
+            end if;
+        end;
+    end loop;
+
+end;
+/
+
+create or replace procedure insert_city
+is
+   cursor ci is
+      select distinct city from employees_temp;
+   v_exist number;
+   v_rec_city locations.city%type;
+begin
+   for v_rec in ci loop
+      v_rec_city := v_rec.city;
+      select count(*) 
+      into v_exist
+      from locations
+      where city = v_rec_city;   
+      
+      if v_exist = 0 then
+         dbms_output.put_line('the city does not exist');
+         insert into locations (location_id, city)
+         values (locations_seq.nextval, v_rec_city);
+      end if;
+   end loop;
+end;
+/
+
+exec insert_city
+
+select * from locations
+
+create or replace procedure insert_department
+is
+    cursor de is
+        select distinct department_name, city from employees_temp;
+    v_exist number;
+    v_location_id number;
+begin
+    for v_rec in de loop
+        select count(*) 
+        into v_exist
+        from departments
+        where department_name = v_rec.department_name;
+
+        if v_exist = 0 then
+            dbms_output.put_line('the department_name not exists');
+            select location_id into v_location_id from locations where city = v_rec.city;
+            insert into departments (department_id, department_name, location_id) values (departments_seq.nextval, v_rec.department_name, v_location_id);
+        end if;
+    end loop; 
+end;
+/
+
+exec  insert_department
+
+select * from departments
+
+create or replace procedure insert_job_title
+is
+    cursor jo is
+        select distinct job_title from employees_temp;
+    v_exist number;
+    v_job_id varchar(10);
+begin
+    for v_rec in jo loop
+        select count(*) 
+        into v_exist
+        from jobs
+        where job_title = v_rec.job_title;
+        
+        if v_exist = 0 then
+            dbms_output.put_line('the job_title not exists');
+            v_job_id := substr(v_rec.job_title, 1, 3);
+            insert into jobs (job_id, job_title)
+            values (v_job_id, v_rec.job_title);
+        else
+            dbms_output.put_line('the job title already exists: ' || v_rec.job_title);
+        end if;
+    end loop;
+end;
+/
+
+exec insert_job_title
+
+
+select * from jobs
+
+
+create or replace procedure Insert_employee
+is
+   cursor em is
+      select * from employees_temp;
+   v_date date;
+    v_sal number;
+    v_job_id varchar2(10);
+    v_dept_id number;
+    v_email varchar2(25);
+     
+   
+   
+begin
+   for v_rec in em loop
+      v_date := to_date(v_rec.hire_date , 'DD/MM/YYYY');
+      v_sal    := to_number(v_rec.salary);
+      select job_id into v_job_id from jobs where job_title = v_rec.job_title;
+      select department_id into v_dept_id from departments where department_name = v_rec.department_name;
+      v_email := substr(v_rec.first_name, 1, 1)||upper(v_rec.last_name);
+      if instr (v_rec.email , '@') > 0 then 
+         INSERT_CITY;
+         INSERT_DEPARTMENT;
+         INSERT_JOB_TITLE;
+         insert into employees
+         (employee_id ,first_name,last_name,email,hire_date,job_id,salary,department_id)
+         values
+         (EMPLOYEES_SEQ.nextval , v_rec.first_name, v_rec.last_name,v_email,v_date,v_job_id,v_rec.salary,v_dept_id);
+         end if ;
+         end loop;
+     end;  
+      /
+    
+exec Insert_employee
+
+select * from employees
+
