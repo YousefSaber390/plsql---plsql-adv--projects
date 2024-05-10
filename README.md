@@ -1,6 +1,6 @@
 # plsql-plsql-adv-projects
 
-PLSQL projects used to solve some business issues:
+PLSQL Adv projects used to solve some business issues:
 
 1- first project is used to create sequences and trigger for each table in the schema.
 the sequence should start from the maximum number in the primary key column +1.
